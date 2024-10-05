@@ -2,25 +2,41 @@
   "name": "pwa-authentication",
   "version": "0.1.0",
   "private": true,
+  "homepage": "localhost",
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node server.js",
     "lint": "next lint"
   },
   "dependencies": {
+    "base64url": "^3.0.1",
+    "body-parser": "^1.20.3",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "errorhandler": "^1.5.1",
+    "express": "^4.21.0",
+    "express-session": "^1.18.0",
+    "fido2-lib": "^3.5.3",
+    "local-web-server": "^5.4.0",
+    "next": "14.2.14",
+    "next-pwa": "^5.6.0",
     "react": "^18",
-    "react-dom": "^18",
-    "next": "14.2.14"
+    "react-dom": "^18"
   },
   "devDependencies": {
-    "typescript": "^5",
+    "@types/cookie-parser": "^1.4.7",
+    "@types/cors": "^2.8.17",
+    "@types/errorhandler": "^1.5.3",
+    "@types/express-session": "^1.18.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.14",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.14"
+    "typescript": "^5"
   }
 }

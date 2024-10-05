@@ -1,101 +1,149 @@
+"use client";
 import Image from "next/image";
+import auth_logo from "../../public/icons/auth.svg";
+import { useState } from "react";
+
+const bufferToBase64 = (buffer: ArrayBuffer): string => {
+  const bytes = new Uint8Array(buffer);
+  const binary = bytes.reduce((acc, byte) => acc + String.fromCharCode(byte), '');
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+};
+
+const base64ToBuffer = (base64: string | ArrayBuffer): Uint8Array => {
+  // If base64 is already an ArrayBuffer, return it as Uint8Array
+  if (base64 instanceof ArrayBuffer) {
+    return new Uint8Array(base64);
+  }
+
+  // Ensure base64 is a string
+  const base64String = typeof base64 === 'string' ? base64 : String(base64);
+
+  // Remove any non-base64 characters (including whitespace)
+  const cleanedBase64 = base64String.replace(/[^A-Za-z0-9+/=_-]/g, '');
+
+  // Replace URL-safe characters
+  const base64Fixed = cleanedBase64.replace(/-/g, "+").replace(/_/g, "/");
+
+  // Add padding if necessary
+  const padding = "=".repeat((4 - (base64Fixed.length % 4)) % 4);
+  const base64Final = base64Fixed + padding;
+
+  try {
+    return Uint8Array.from(atob(base64Final), (c) => c.charCodeAt(0));
+  } catch (error) {
+    console.error('Failed to decode base64 string:', base64Final, error);
+    return new Uint8Array(0); // Return empty array on error
+  }
+};
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState("");
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  // Function to handle authentication
+  async function authenticate() {
+    setIsLoading(true);
+    try {
+      // Fetch authentication options from the server
+      const response = await fetch(
+        "http://localhost:3000/authentication-options",
+        {
+          method: "GET",
+          credentials: "include",
+        }
+      );
+
+      const credentialRequestOptions = await response.json();
+
+      // Convert the challenge to Uint8Array
+      credentialRequestOptions.challenge = base64ToBuffer(
+        credentialRequestOptions.challenge
+      );
+
+      // Check if allowCredentials is defined and is an array
+      if (Array.isArray(credentialRequestOptions.allowCredentials)) {
+        credentialRequestOptions.allowCredentials =
+          credentialRequestOptions.allowCredentials.map((cred: any) => ({
+            ...cred,
+            id: base64ToBuffer(cred.id),
+          }));
+      } else {
+        console.warn("allowCredentials is not defined or not an array");
+        credentialRequestOptions.allowCredentials = [];
+      }
+
+      // Call WebAuthn API to get credentials
+      const credential = (await navigator.credentials.get({
+        publicKey: credentialRequestOptions,
+      })) as PublicKeyCredential;
+
+      // Prepare data to send to the server for verification
+      const data = {
+        rawId: bufferToBase64(credential.rawId),
+        response: {
+          authenticatorData: bufferToBase64(
+            (credential.response as AuthenticatorAssertionResponse)
+              .authenticatorData
+          ),
+          clientDataJSON: bufferToBase64(credential.response.clientDataJSON),
+          signature: bufferToBase64(
+            (credential.response as AuthenticatorAssertionResponse).signature
+          ),
+          userHandle: bufferToBase64(
+            (credential.response as AuthenticatorAssertionResponse)
+              .userHandle || new Uint8Array()
+          ),
+        },
+        id: credential.id,
+        type: credential.type,
+      };
+
+      // Send the credentials to the server for verification
+      const authResponse = await fetch("http://localhost:3000/authenticate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential: data }),
+        credentials: "include",
+      });
+
+      const result = await authResponse.json();
+
+      if (result.status === "ok") {
+        setMessage("Authentication successful!");
+      } else {
+        setMessage("Authentication failed!");
+      }
+    } catch (error) {
+      console.error("Authentication failed", error);
+      setMessage("Authentication failed!");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full">
+      <button
+        onClick={authenticate}
+        disabled={isLoading}
+        className="bg-white flex flex-row items-center justify-center text-black p-4 rounded-md"
+      >
+        <div className="h-6 w-6 relative">
+          <Image
+            src={auth_logo}
+            alt="auth_logo"
+            fill
+            style={{ objectFit: "contain" }}
+          />
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        <span className="ml-2">Authenticate</span>
+      </button>
+
+      {isLoading && <p>Loading...</p>}
+      {message && <p>{message}</p>}
     </div>
   );
 }

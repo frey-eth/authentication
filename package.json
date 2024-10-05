@@ -2,10 +2,9 @@
   "name": "pwa-authentication",
   "version": "0.1.0",
   "private": true,
-  "homepage": "localhost",
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "node server.js",
     "build": "next build",
     "start": "node server.js",
     "lint": "next lint"

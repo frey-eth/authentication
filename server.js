@@ -14,10 +14,10 @@ import base64url from "base64url";
 const dev = process.env.NODE_ENV !== "production";
 const nextApp = next({ dev });
 const handle = nextApp.getRequestHandler();
-
+const rpId = window.location.hostname;
 const fido = new Fido2Lib({
   timeout: 60000,
-  rpId: "localhost",
+  rpId: rpId,
   rpName: "What PWA Can Do Today",
   rpIcon: "https://whatpwacando.today/src/img/icons/icon-512x512.png",
   challengeSize: 128,
@@ -63,6 +63,7 @@ nextApp.prepare().then(() => {
 
   // WebAuthn routes
   app.get("/registration-options", async (req, res) => {
+    console.log("register");
     const registrationOptions = await fido.attestationOptions();
 
     req.session.challenge = Buffer.from(registrationOptions.challenge);
